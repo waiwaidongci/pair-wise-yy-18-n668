@@ -4,13 +4,27 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { randomUUID } = require('crypto');
 const config = require('./project.config');
+const handoverRoutes = require('./src/handovers/routes');
 
 const app = express();
 const PORT = process.env.PORT || config.port;
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'app.db');
+const SQLITE3_SHIM = path.join(__dirname, 'scripts', 'sqlite3');
 
 app.use(express.json({ limit: '2mb' }));
+
+function resolveSqlite3Bin() {
+  if (process.env.SQLITE3_BIN) return process.env.SQLITE3_BIN;
+  try {
+    execFileSync('sqlite3', ['--version'], { stdio: 'pipe' });
+    return 'sqlite3';
+  } catch (error) {
+    return SQLITE3_SHIM;
+  }
+}
+
+const SQLITE3_BIN = resolveSqlite3Bin();
 
 function sqlValue(value) {
   if (value === null || value === undefined) return 'NULL';
@@ -19,7 +33,7 @@ function sqlValue(value) {
 
 function runSql(sql) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  return execFileSync('sqlite3', [DB_FILE], {
+  return execFileSync(SQLITE3_BIN, [DB_FILE], {
     input: sql,
     encoding: 'utf8'
   });
@@ -200,6 +214,9 @@ app.get('/api/meta', (req, res) => {
     examples: config.examples || []
   });
 });
+
+// 巡演场次与木箱交接单（路由/判定/存取见 src/handovers/），需挂在通用集合路由之前。
+app.use('/api', handoverRoutes);
 
 app.get('/api/:collection', (req, res, next) => {
   try {

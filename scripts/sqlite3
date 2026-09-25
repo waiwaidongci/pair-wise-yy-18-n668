@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Minimal sqlite3 CLI compatible shim backed by python3's sqlite3 module.
+
+Supports the subset this project uses:
+  - database file passed as the first argument
+  - SQL script read from stdin (multiple statements allowed)
+  - dot commands: .mode json | .mode list
+  - SELECT output as a JSON array of row objects in json mode
+  - non-zero exit with a stderr message on SQL errors
+"""
+import json
+import sqlite3
+import sys
+
+
+def main():
+    if len(sys.argv) < 2:
+        sys.stderr.write('usage: sqlite3 <dbfile>\n')
+        sys.exit(2)
+    db_path = sys.argv[1]
+    script = sys.stdin.read()
+
+    con = sqlite3.connect(db_path)
+    con.isolation_level = None  # autocommit: BEGIN/COMMIT pass straight through
+    mode = 'list'
+    chunks = []
+    buffer = ''
+
+    def run_statement(stmt):
+        stmt = stmt.strip()
+        if not stmt:
+            return
+        cur = con.cursor()
+        try:
+            cur.execute(stmt)
+        except sqlite3.Error as exc:
+            sys.stderr.write('Error: %s\n' % exc)
+            sys.exit(1)
+        if cur.description:
+            cols = [d[0] for d in cur.description]
+            rows = cur.fetchall()
+            if mode == 'json':
+                chunks.append(json.dumps([dict(zip(cols, r)) for r in rows]))
+            else:
+                for row in rows:
+                    chunks.append('|'.join('' if v is None else str(v) for v in row))
+
+    for line in script.splitlines():
+        stripped = line.strip()
+        if stripped.startswith('.') and not buffer.strip():
+            parts = stripped.split()
+            if parts[0] == '.mode' and len(parts) > 1:
+                mode = parts[1]
+            continue
+        buffer += line + '\n'
+        if sqlite3.complete_statement(buffer):
+            run_statement(buffer)
+            buffer = ''
+    if buffer.strip():
+        run_statement(buffer)
+
+    if chunks:
+        sys.stdout.write('\n'.join(chunks) + '\n')
+    con.close()
+
+
+if __name__ == '__main__':
+    main()
