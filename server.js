@@ -201,6 +201,8 @@ app.get('/api/meta', (req, res) => {
   });
 });
 
+app.use('/api/handovers', require('./handover.routes'));
+
 app.get('/api/:collection', (req, res, next) => {
   try {
     findCollection(req.params.collection);

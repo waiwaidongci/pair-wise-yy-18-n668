@@ -6,7 +6,7 @@ module.exports = {
     puppetHeads: {
       label: '偶头档案',
       defaultStatus: '可演出',
-      statuses: ['可演出', '待修补', '修补中', '试演中', '不可演出', '已装箱'],
+      statuses: ['可演出', '待检', '待修补', '修补中', '试演中', '不可演出', '已装箱'],
       required: ['role', 'play', 'paintStatus', 'mechanism', 'boxNo'],
       titleFields: ['role', 'play'],
       defaults: { currentUsable: true }
